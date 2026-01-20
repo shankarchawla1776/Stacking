@@ -6,6 +6,8 @@ from scipy.stats import zscore
 from numpy.linalg import inv, svd
 from sklearn.model_selection import KFold
 from sklearn.linear_model import Ridge, RidgeCV
+from himalaya.ridge import Ridge as HimalayaRidge, RidgeCV as HimalayaRidgeCV
+from himalaya.backend import set_backend
 
 
 def corr(X, Y, axis=0):
@@ -115,6 +117,32 @@ def ridge_by_lambda_sk(X, Y, Xval, Yval, lambdas=np.array([0.1, 1, 10, 100, 1000
     return error
 
 
+def ridge_himalaya(X, Y, lmbda):
+    """Compute ridge regression weights using Himalaya."""
+    set_backend("numpy", on_error="raise")
+    rd = HimalayaRidge(alpha=lmbda, fit_intercept=False, solver="svd")
+    rd.fit(X, Y)
+    return rd.coef_.T
+
+
+def ridgeCV_himalaya(X, Y, lmbdas):
+    """Compute ridge regression weights using Himalaya with cross-validation."""
+    set_backend("numpy", on_error="raise")
+    rd = HimalayaRidgeCV(alphas=lmbdas, fit_intercept=False, solver="svd")
+    rd.fit(X, Y)
+    return rd.coef_.T
+
+
+def ridge_by_lambda_himalaya(X, Y, Xval, Yval, lambdas=np.array([0.1, 1, 10, 100, 1000])):
+    """Compute validation errors for ridge regression with different lambda values using Himalaya."""
+    set_backend("numpy", on_error="raise")
+    error = np.zeros((lambdas.shape[0], Y.shape[1]))
+    for idx, lmbda in enumerate(lambdas):
+        weights = ridge_himalaya(X, Y, lmbda)
+        error[idx] = 1 - R2(np.dot(Xval, weights), Yval)
+    return error
+
+
 def ridge_svd(X, Y, lmbda):
     """
     Ridge regression using singular value decomposition (SVD).
@@ -164,11 +192,17 @@ def cross_val_ridge(
         "plain": ridge_by_lambda,
         "svd": ridge_by_lambda_svd,
         "ridge_sk": ridge_by_lambda_sk,
+        "himalaya": ridge_by_lambda_himalaya,
     }[
         method
     ]  # loss of the regressor
 
-    ridge_2 = {"plain": ridge, "svd": ridge_svd, "ridge_sk": ridge_sk,}[
+    ridge_2 = {
+        "plain": ridge,
+        "svd": ridge_svd,
+        "ridge_sk": ridge_sk,
+        "himalaya": ridge_himalaya,
+    }[
         method
     ]  # solver for the weights
 
